@@ -49,7 +49,7 @@ const main = async ({ wsUrl, secret, port = 1080 }) => {
           const ws = new WebSocket(wsUrl, {
             headers: {
               authorization: 'Bearer ' + secret,
-              host: `${address}:${port}`,
+              'X-Host': `${address}:${port}`,
             },
             timeout: 5e3,
           });

@@ -25,8 +25,7 @@ export default {
         const [client, server] = Object.values(new WebSocketPair());
 
         // Connect to the target server
-        const [hostname, port] = request.headers.get("Host").split(":");
-
+        const [hostname, port] = request.headers.get("X-Host").split(":");
         try{
             const socket = connect({ hostname, port });
             new ReadableStream({
