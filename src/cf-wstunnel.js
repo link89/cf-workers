@@ -1,3 +1,9 @@
+/*
+ * A socket tunneling service for Cloudflare Workers.
+ * Known limitations:
+ * - Cannot connect to some website, for example, openai.com
+*/
+
 import { connect } from 'cloudflare:sockets';
 
 const secret = 'secret';  // Change this to your secret
@@ -23,7 +29,6 @@ export default {
 
         // Create a WebSocket pair
         const [client, server] = Object.values(new WebSocketPair());
-
         const [hostname, port] = request.headers.get("X-Host").split(":");
 
         server.accept();
@@ -35,19 +40,44 @@ export default {
 
                 new ReadableStream({
                     start(controller) {
-                        server.onmessage = ({ data }) => controller.enqueue(data);
-                        server.onerror = e => controller.error(e);
-                        server.onclose = e => controller.close(e);
+                        server.addEventListener('message', ({ data }) => {
+                            console.log('rs: message');
+                            controller.enqueue(data);
+                        });
+                        server.addEventListener('error', e => {
+                            console.log('rs: error', e.message);
+                            controller.error(e);
+                            server.close();
+                        });
+                        server.addEventListener('close', e => {
+                            console.log('rs: close', e);
+                            controller.close(e);
+                        });
                     },
-                    cancel(reason) { server.close(); }
+                    cancel(reason) { 
+                        console.log('rs: cancel', reason);
+                        server.close(); 
+                    }
                 }).pipeTo(socket.writable);
 
                 socket.readable.pipeTo(new WritableStream({
-                    start(controller) { server.onerror = e => controller.error(e); },
-                    write(chunk) { server.send(chunk); }
+                    start(controller) { 
+                        server.addEventListener('error', e => {
+                            console.log('ws: error', e.message);
+                            controller.error(e);
+                            server.close();
+                        });
+                    },
+                    write(chunk) { 
+                        console.log('ws: write', chunk);
+                        server.send(chunk); 
+                    }
                 }));
 
-            } catch (error) { server.close(); }
+            } catch (error) { 
+                server.close(); 
+                throw error;
+            }
         }, { once: true });
 
         return new Response(null, { status: 101, webSocket: client });

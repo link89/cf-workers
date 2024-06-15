@@ -57,6 +57,7 @@ const main = async ({ wsUrl, secret, port = 1080 }) => {
             ws.send('go');  // use first message to trigger connection
             clientSocket.write(Buffer.from([0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0])); // Connection established
             clientSocket.on('data', (data) => {
+              log('send data to', address, port);
               ws.send(data);
             });
             ws.on('message', (data) => {
