@@ -7,8 +7,8 @@ function log(message, ...args) {
   console.log(new Date(), message, ...args);
 }
 
-const main = async (wsUrl) => {
-
+const main = async ({ wsUrl, secret, port = 1080 }) => {
+  
   const server = net.createServer((clientSocket) => {
     log('Client connected');
 
@@ -45,43 +45,63 @@ const main = async (wsUrl) => {
 
         if (command === 0x01) { // CONNECT
           log(`Connecting to ${address}:${port}`);
-
-          const serverSocket = net.createConnection({ host: address, port: port }, () => {
-            clientSocket.write(Buffer.from([0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0])); // Connection established
-            clientSocket.pipe(serverSocket);
-            serverSocket.pipe(clientSocket);
+          
+          const ws = new WebSocket(wsUrl, {
+            headers: {
+              authorization: 'Bearer ' + secret,
+              host: `${address}:${port}`,
+            },
+            timeout: 5e3,
           });
 
-          serverSocket.on('error', (err) => {
-            log('Server socket error:', err.message);
+          ws.on('open', () => {
+            log('WebSocket connection established');
+            clientSocket.write(Buffer.from([0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0])); // Connection established
+            clientSocket.on('data', (data) => {
+              ws.send(data);
+            });
+            ws.on('message', (data) => {
+              clientSocket.write(data);
+            });
+          });
+          ws.on('error', (err) => {
+            log('WebSocket error:', err.message);
             clientSocket.end();
           });
-
-          serverSocket.on('timeout', () => {
-            console.log('Connection timed out');
-            serverSocket.end();
-            // Optionally notify the client of the timeout
-            clientSocket.write(Buffer.from([0x05, 0x04, 0x00, 0x01, 0, 0, 0, 0, 0, 0])); // 0x04 is 'Host unreachable' in SOCKS5
+          ws.on('close', () => {
+            log('WebSocket connection closed');
+            clientSocket.end();
           });
-
         } else {
-          log('Command not supported');
+          log('Command not supported:', command);
           clientSocket.end();
         }
       });
     });
 
-    clientSocket.on('error', (err) => {
-      log('Client socket error:', err.message);
-    });
+
   });
 
-  server.listen(1080, () => {
-    log('SOCKS5 proxy server listening on port 1080');
+  server.listen(port, () => {
+    log('SOCKS5 proxy server listening on port:', port);
   });
 }
 
-main().catch((err) => {
+let wsUrl = null;
+let port = 1080;
+let secret = null;
+
+process.argv.forEach((arg, index) => {
+  if (arg === '--wsUrl') {
+    wsUrl = process.argv[index + 1];
+  } else if (arg === '--port') {
+    port = parseInt(process.argv[index + 1], 10);
+  } else if (arg === '--secret') {
+    secret = process.argv[index + 1];
+  }
+});
+
+main({wsUrl, port, secret}).catch((err) => {
   console.error(err);
   process.exit(1);
 });
