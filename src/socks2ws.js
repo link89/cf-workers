@@ -8,7 +8,7 @@ function log(message, ...args) {
 }
 
 const main = async ({ wsUrl, secret, port = 1080 }) => {
-  
+
   const server = net.createServer((clientSocket) => {
     log('Client connected');
 
@@ -45,17 +45,16 @@ const main = async ({ wsUrl, secret, port = 1080 }) => {
 
         if (command === 0x01) { // CONNECT
           log(`Connecting to ${address}:${port}`);
-          
           const ws = new WebSocket(wsUrl, {
             headers: {
               authorization: 'Bearer ' + secret,
               'X-Host': `${address}:${port}`,
-            },
-            timeout: 5e3,
+            }, timeout: 5e3,
           });
 
           ws.on('open', () => {
             log('WebSocket connection established');
+            ws.send('go');  // use first message to trigger connection
             clientSocket.write(Buffer.from([0x05, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0])); // Connection established
             clientSocket.on('data', (data) => {
               ws.send(data);
@@ -101,7 +100,7 @@ process.argv.forEach((arg, index) => {
   }
 });
 
-main({wsUrl, port, secret}).catch((err) => {
+main({ wsUrl, port, secret }).catch((err) => {
   console.error(err);
   process.exit(1);
 });
